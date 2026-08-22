@@ -1,3 +1,6 @@
+using RecompOne.Runtime;
+using RecompOne.Runtime.Memory;
+
 namespace CrashBandicoot.Switch;
 
 internal static class Program
@@ -10,20 +13,32 @@ internal static class Program
             if (string.IsNullOrEmpty(root) || root == "/")
                 root = "/";
 
-            try
-            {
-                Directory.SetCurrentDirectory(root);
-            }
-            catch
-            {
-                // mono-nx
-            }
+            try { Directory.SetCurrentDirectory(root); }
+            catch { /* mono-nx */ }
 
             var cwd = Directory.GetCurrentDirectory();
 
-            Console.WriteLine("[Switch] Crash Bandicoot (RecompOne host stub)");
+            Console.WriteLine("[Switch] Crash Bandicoot (RecompOne host)");
             Console.WriteLine($"[Switch] BaseDirectory: {AppContext.BaseDirectory}");
             Console.WriteLine($"[Switch] CWD: {cwd}");
+
+            // Writable root (save/game/logs obok DLL)
+            try
+            {
+                AppPaths.SetRoot(cwd);
+                AppPaths.EnsureCreated();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Switch] AppPaths: {ex.Message}");
+                try
+                {
+                    Directory.CreateDirectory(Path.Combine(cwd, "save"));
+                    Directory.CreateDirectory(Path.Combine(cwd, "game"));
+                    Directory.CreateDirectory(Path.Combine(cwd, "logs"));
+                }
+                catch { /* ignore */ }
+            }
 
             string? cuePath = null;
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
@@ -33,59 +48,49 @@ internal static class Program
                 if (!File.Exists(cuePath))
                     cuePath = null;
             }
-
             cuePath ??= FindCue(cwd);
 
             if (cuePath is null)
             {
-                Console.WriteLine("[Switch] Nie znaleziono .cue w żadnej znanej ścieżce.");
-                Console.WriteLine("[Switch] Kontynuacja bez disc (dev/CI).");
+                Console.WriteLine("[Switch] Brak .cue — nie da się wywołać Entry.Run.");
+                return 1;
             }
-            else
-            {
-                Console.WriteLine($"[Switch] Znaleziono .cue: {cuePath}");
-            }
+            Console.WriteLine($"[Switch] Znaleziono .cue: {cuePath}");
 
-            var dataRoot = cwd;
-            try
-            {
-                Directory.CreateDirectory(Path.Combine(dataRoot, "save"));
-                Directory.CreateDirectory(Path.Combine(dataRoot, "game"));
-                Directory.CreateDirectory(Path.Combine(dataRoot, "logs"));
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Switch] dirs: {ex.Message}");
-            }
-
-            // Probe Runtime obok hosta
-            var runtimeBesideHost = Path.Combine(dataRoot, "RecompOne.Runtime.dll");
+            var runtimeBesideHost = Path.Combine(cwd, "RecompOne.Runtime.dll");
             Console.WriteLine($"[Switch] RecompOne.Runtime.dll @ host: exists={File.Exists(runtimeBesideHost)} path={runtimeBesideHost}");
 
-            var gameDll = GameAssemblyLoader.FindGameDll(dataRoot);
+            var gameDll = GameAssemblyLoader.FindGameDll(cwd);
             if (gameDll is null)
             {
-                Console.WriteLine("[Switch] Brak game.recomp.dll pod /switch/game/...");
-                Console.WriteLine("[Switch] Skopiuj z PC folder game/<fingerprint>/ po prepare.");
-                TryListGame(dataRoot);
+                Console.WriteLine("[Switch] Brak game.recomp.dll.");
+                TryListGame(cwd);
+                return 1;
             }
-            else
-            {
-                try
-                {
-                    GameAssemblyLoader.Inspect(gameDll);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Switch] Load/Inspect game DLL failed: {ex}");
-                }
-            }
+
+            var asm = GameAssemblyLoader.LoadGame(gameDll);
+            GameAssemblyLoader.Inspect(asm);
 
             using var host = new SwitchPlatformHost();
             host.Initialize();
 
-            Console.WriteLine("[Switch] Host OK (smoke). Entry.Run po udanym Inspect + Runtime.");
-            host.RunSmokeLoop(seconds: 2);
+            // PS1 memory — jak na desktopie
+            IMemory memory = new PSMemory();
+            Console.WriteLine("[Switch] PSMemory created.");
+
+            try
+            {
+                GameAssemblyLoader.InvokeEntryRun(asm, memory, cuePath);
+            }
+            catch (Exception ex)
+            {
+                // TargetInvocationException owija właściwy błąd
+                var inner = ex is System.Reflection.TargetInvocationException tie && tie.InnerException != null
+                    ? tie.InnerException
+                    : ex;
+                Console.WriteLine($"[Switch] Entry.Run FAILED: {inner}");
+                Console.WriteLine(inner.StackTrace);
+            }
 
             host.Shutdown();
             return 0;
@@ -107,34 +112,16 @@ internal static class Program
             "/switch/crash/Crash Bandicoot.cue",
             "/switch/Crash Bandicoot.cue",
             "/crash/Crash Bandicoot.cue",
-            "/switch/crash/CRASH.CUE",
-            "/switch/crash/crash.cue",
         };
 
         foreach (var p in candidates)
         {
             bool exists = false;
-            try
-            {
-                exists = File.Exists(p);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Switch] check error: {p} → {ex.Message}");
-            }
-
+            try { exists = File.Exists(p); }
+            catch (Exception ex) { Console.WriteLine($"[Switch] check error: {p} → {ex.Message}"); }
             Console.WriteLine($"[Switch] check: {p} exists={exists}");
-            if (exists)
-                return p;
+            if (exists) return p;
         }
-
-        TryList(cwd);
-        TryList(Path.Combine(cwd, "crash"));
-        TryList("/switch");
-        TryList("/switch/crash");
-        TryList("/crash");
-        TryList("/");
-
         return null;
     }
 
@@ -142,17 +129,13 @@ internal static class Program
     {
         TryList(Path.Combine(root, "game"));
         var game = Path.Combine(root, "game");
-        if (!Directory.Exists(game))
-            return;
+        if (!Directory.Exists(game)) return;
         try
         {
             foreach (var d in Directory.GetDirectories(game))
                 TryList(d);
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Switch] TryListGame: {ex.Message}");
-        }
+        catch (Exception ex) { Console.WriteLine($"[Switch] TryListGame: {ex.Message}"); }
     }
 
     private static void TryList(string dir)
@@ -164,7 +147,6 @@ internal static class Program
                 Console.WriteLine($"[Switch] list: {dir} — BRAK KATALOGU");
                 return;
             }
-
             Console.WriteLine($"[Switch] list: {dir}");
             foreach (var d in Directory.GetDirectories(dir))
                 Console.WriteLine($"  dir:  {d}");
