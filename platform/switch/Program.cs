@@ -2,9 +2,6 @@ namespace CrashBandicoot.Switch;
 
 internal static class Program
 {
-    // Domyślna lokalizacja disc na SD (użytkownik dostarcza własny dump)
-    private const string DefaultCueRelative = "switch/crash/Crash Bandicoot.cue";
-
     private static int Main(string[] args)
     {
         try
@@ -19,33 +16,41 @@ internal static class Program
             }
             catch
             {
-                // mono-nx / hbmenu — CWD może być read-only
+                // mono-nx / hbmenu — CWD może być już ustawione (np. /switch)
             }
 
-            var cuePath = args.Length > 0
-                ? args[0]
-                : Path.Combine(root, DefaultCueRelative);
+            var cwd = Directory.GetCurrentDirectory();
 
             Console.WriteLine("[Switch] Crash Bandicoot (RecompOne host stub)");
-            Console.WriteLine($"[Switch] CWD: {Directory.GetCurrentDirectory()}");
-            Console.WriteLine($"[Switch] Cue: {cuePath}");
+            Console.WriteLine($"[Switch] BaseDirectory: {AppContext.BaseDirectory}");
+            Console.WriteLine($"[Switch] CWD: {cwd}");
 
-            if (!File.Exists(cuePath))
+            string? cuePath = null;
+            if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
             {
-                Console.WriteLine("[Switch] Brak pliku .cue — połóż legalny dump NTSC-U (SCUS-94900).");
-                Console.WriteLine($"[Switch] Oczekiwana ścieżka: {cuePath}");
-                // Nie wychodzimy z kodem 1 w CI bez disc — tylko log
+                cuePath = args[0];
+                Console.WriteLine($"[Switch] Cue z argv: {cuePath} exists={File.Exists(cuePath)}");
+                if (!File.Exists(cuePath))
+                    cuePath = null;
+            }
+
+            cuePath ??= FindCue(cwd);
+
+            if (cuePath is null)
+            {
+                Console.WriteLine("[Switch] Nie znaleziono .cue w żadnej znanej ścieżce.");
                 Console.WriteLine("[Switch] Kontynuacja smoke bez disc (dev/CI).");
             }
             else
             {
-                Console.WriteLine("[Switch] Znaleziono .cue");
+                Console.WriteLine($"[Switch] Znaleziono .cue: {cuePath}");
+                // TODO: podaj cuePath do Runtime (CdPath / Entry.Run)
             }
 
             using var host = new SwitchPlatformHost();
             host.Initialize();
 
-            // TODO: AppPaths, settings, prepare/recomp, Entry.Run(...)
+            // TODO: AppPaths, settings, prepare/recomp, Entry.Run(cuePath)
             Console.WriteLine("[Switch] Host OK. Podłącz RecompOne.Runtime Entry gdy game/ będzie gotowe.");
             host.RunSmokeLoop(seconds: 2);
 
@@ -56,6 +61,73 @@ internal static class Program
         {
             Console.WriteLine($"[Switch] FATAL: {ex}");
             return 1;
+        }
+    }
+
+    /// <summary>
+    /// Szuka legalnego dumpa NTSC-U w typowych lokalizacjach na SD.
+    /// </summary>
+    private static string? FindCue(string cwd)
+    {
+        string[] candidates =
+        {
+            Path.Combine(cwd, "crash", "Crash Bandicoot.cue"),
+            Path.Combine(cwd, "Crash Bandicoot.cue"),
+            Path.Combine(cwd, "crash", "crash.cue"),
+            "/switch/crash/Crash Bandicoot.cue",
+            "/switch/Crash Bandicoot.cue",
+            "/crash/Crash Bandicoot.cue",
+            "/switch/crash/CRASH.CUE",
+            "/switch/crash/crash.cue",
+        };
+
+        foreach (var p in candidates)
+        {
+            bool exists = false;
+            try
+            {
+                exists = File.Exists(p);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Switch] check error: {p} → {ex.Message}");
+            }
+
+            Console.WriteLine($"[Switch] check: {p} exists={exists}");
+            if (exists)
+                return p;
+        }
+
+        // Listing — w logu widać realne nazwy plików na karcie
+        TryList(cwd);
+        TryList(Path.Combine(cwd, "crash"));
+        TryList("/switch");
+        TryList("/switch/crash");
+        TryList("/crash");
+        TryList("/");
+
+        return null;
+    }
+
+    private static void TryList(string dir)
+    {
+        try
+        {
+            if (!Directory.Exists(dir))
+            {
+                Console.WriteLine($"[Switch] list: {dir} — BRAK KATALOGU");
+                return;
+            }
+
+            Console.WriteLine($"[Switch] list: {dir}");
+            foreach (var d in Directory.GetDirectories(dir))
+                Console.WriteLine($"  dir:  {d}");
+            foreach (var f in Directory.GetFiles(dir))
+                Console.WriteLine($"  file: {f}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Switch] list fail {dir}: {ex.Message}");
         }
     }
 }
