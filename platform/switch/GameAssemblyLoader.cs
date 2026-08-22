@@ -1,11 +1,8 @@
 using System.Reflection;
+using RecompOne.Runtime.Memory;
 
 namespace CrashBandicoot.Switch;
 
-/// <summary>
-/// Ładuje przygotowany na PC game.recomp.dll.
-/// Wymaga RecompOne.Runtime.dll w /switch/ lub obok game DLL.
-/// </summary>
 public static class GameAssemblyLoader
 {
     public static string? FindGameDll(string root)
@@ -20,10 +17,7 @@ public static class GameAssemblyLoader
                 if (File.Exists(p))
                     candidates.Add(p);
             }
-            catch
-            {
-                // ignore
-            }
+            catch { /* ignore */ }
         }
 
         AddIfExists(Path.Combine(gameRoot, "game.recomp.dll"));
@@ -44,13 +38,6 @@ public static class GameAssemblyLoader
                             candidates.Add(f);
                     }
                 }
-
-                foreach (var f in Directory.GetFiles(gameRoot, "*.dll"))
-                {
-                    var name = Path.GetFileName(f);
-                    if (name.Contains("recomp", StringComparison.OrdinalIgnoreCase))
-                        candidates.Add(f);
-                }
             }
         }
         catch (Exception ex)
@@ -58,13 +45,9 @@ public static class GameAssemblyLoader
             Console.WriteLine($"[Switch] FindGameDll scan error: {ex.Message}");
         }
 
-        candidates = candidates
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
+        candidates = candidates.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var preferred = candidates.FirstOrDefault(c =>
             Path.GetFileName(c).Contains("recomp", StringComparison.OrdinalIgnoreCase));
-
         return preferred ?? candidates.FirstOrDefault();
     }
 
@@ -77,7 +60,7 @@ public static class GameAssemblyLoader
             Path.Combine(root, "game"),
         };
 
-        Console.WriteLine("[Switch] Dependency probe (szukam RecompOne.Runtime.dll):");
+        Console.WriteLine("[Switch] Dependency probe (RecompOne.Runtime.dll):");
         foreach (var dir in dirs.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var runtime = Path.Combine(dir, "RecompOne.Runtime.dll");
@@ -87,39 +70,23 @@ public static class GameAssemblyLoader
         }
     }
 
-    public static void Inspect(string dllPath)
+    public static Assembly LoadGame(string dllPath)
     {
         Console.WriteLine($"[Switch] Loading game assembly: {dllPath}");
-        LogDependencyHints(
-            Path.GetDirectoryName(dllPath) is { } g && g.Contains("game")
-                ? Path.GetFullPath(Path.Combine(g, "..", ".."))
-                : "/switch",
-            dllPath);
-
-        // Prostsze: probe względem CWD i folderu gry
         try
         {
             var cwd = Directory.GetCurrentDirectory();
             LogDependencyHints(cwd, dllPath);
         }
-        catch
-        {
-            // ignore
-        }
+        catch { /* ignore */ }
 
-        Assembly asm;
-        try
-        {
-            asm = Assembly.LoadFrom(dllPath);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[Switch] Assembly.LoadFrom failed: {ex}");
-            throw;
-        }
-
+        var asm = Assembly.LoadFrom(dllPath);
         Console.WriteLine($"[Switch] Assembly: {asm.FullName}");
+        return asm;
+    }
 
+    public static void Inspect(Assembly asm)
+    {
         Type[] types;
         try
         {
@@ -127,7 +94,7 @@ public static class GameAssemblyLoader
         }
         catch (ReflectionTypeLoadException rtle)
         {
-            Console.WriteLine("[Switch] ReflectionTypeLoadException — brakujące zależności:");
+            Console.WriteLine("[Switch] ReflectionTypeLoadException:");
             if (rtle.LoaderExceptions != null)
             {
                 foreach (var le in rtle.LoaderExceptions)
@@ -136,9 +103,7 @@ public static class GameAssemblyLoader
                         Console.WriteLine($"  LOADER: {le.GetType().Name}: {le.Message}");
                 }
             }
-
             types = rtle.Types?.Where(t => t != null).Cast<Type>().ToArray() ?? Array.Empty<Type>();
-            Console.WriteLine($"[Switch] Udało się odczytać częściowo typów: {types.Length}");
         }
 
         Type? entryType = null;
@@ -153,7 +118,7 @@ public static class GameAssemblyLoader
 
         if (entryType is null)
         {
-            Console.WriteLine("[Switch] Brak Entry/Program w załadowanych typach. Sample:");
+            Console.WriteLine("[Switch] Brak Entry/Program. Sample types:");
             foreach (var t in types.Take(30))
                 Console.WriteLine($"  {t.FullName}");
             return;
@@ -166,5 +131,38 @@ public static class GameAssemblyLoader
         }
 
         Console.WriteLine("[Switch] Inspect OK.");
+    }
+
+    /// <summary>
+    /// Wywołuje Recompiled.Entry.Run(IMemory, string cuePath).
+    /// </summary>
+    public static void InvokeEntryRun(Assembly asm, IMemory memory, string cuePath)
+    {
+        Type? entryType = null;
+        try
+        {
+            entryType = asm.GetExportedTypes().FirstOrDefault(t => t.Name == "Entry");
+        }
+        catch (ReflectionTypeLoadException rtle)
+        {
+            entryType = rtle.Types?.FirstOrDefault(t => t != null && t.Name == "Entry");
+        }
+
+        if (entryType is null)
+            throw new InvalidOperationException("Typ Recompiled.Entry nie znaleziony.");
+
+        var run = entryType.GetMethod(
+            "Run",
+            BindingFlags.Public | BindingFlags.Static,
+            binder: null,
+            types: new[] { typeof(IMemory), typeof(string) },
+            modifiers: null);
+
+        if (run is null)
+            throw new InvalidOperationException("Entry.Run(IMemory, String) nie znalezione.");
+
+        Console.WriteLine($"[Switch] Calling Entry.Run(memory, \"{cuePath}\") ...");
+        run.Invoke(null, new object[] { memory, cuePath });
+        Console.WriteLine("[Switch] Entry.Run returned.");
     }
 }
