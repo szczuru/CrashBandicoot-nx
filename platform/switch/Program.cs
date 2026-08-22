@@ -39,19 +39,49 @@ internal static class Program
             if (cuePath is null)
             {
                 Console.WriteLine("[Switch] Nie znaleziono .cue w żadnej znanej ścieżce.");
-                Console.WriteLine("[Switch] Kontynuacja smoke bez disc (dev/CI).");
+                Console.WriteLine("[Switch] Kontynuacja bez disc (dev/CI).");
             }
             else
             {
                 Console.WriteLine($"[Switch] Znaleziono .cue: {cuePath}");
-                // TODO: podaj cuePath do Runtime (CdPath / Entry.Run)
+            }
+
+            // Writable root na SD (obok DLL) — save/game/logs
+            var dataRoot = cwd;
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(dataRoot, "save"));
+                Directory.CreateDirectory(Path.Combine(dataRoot, "game"));
+                Directory.CreateDirectory(Path.Combine(dataRoot, "logs"));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Switch] dirs: {ex.Message}");
+            }
+
+            var gameDll = GameAssemblyLoader.FindGameDll(dataRoot);
+            if (gameDll is null)
+            {
+                Console.WriteLine("[Switch] Brak game.recomp.dll pod /switch/game/...");
+                Console.WriteLine("[Switch] Skopiuj z PC folder game/<fingerprint>/ po udanym --prepare / starcie gry.");
+                TryListGame(dataRoot);
+            }
+            else
+            {
+                try
+                {
+                    GameAssemblyLoader.Inspect(gameDll);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Switch] Load/Inspect game DLL failed: {ex}");
+                }
             }
 
             using var host = new SwitchPlatformHost();
             host.Initialize();
 
-            // TODO: AppPaths, settings, prepare/recomp, Entry.Run(cuePath)
-            Console.WriteLine("[Switch] Host OK. Podłącz RecompOne.Runtime Entry gdy game/ będzie gotowe.");
+            Console.WriteLine("[Switch] Host OK. Podłącz RecompOne.Runtime Entry gdy Inspect przejdzie.");
             host.RunSmokeLoop(seconds: 2);
 
             host.Shutdown();
@@ -64,9 +94,6 @@ internal static class Program
         }
     }
 
-    /// <summary>
-    /// Szuka legalnego dumpa NTSC-U w typowych lokalizacjach na SD.
-    /// </summary>
     private static string? FindCue(string cwd)
     {
         string[] candidates =
@@ -98,7 +125,6 @@ internal static class Program
                 return p;
         }
 
-        // Listing — w logu widać realne nazwy plików na karcie
         TryList(cwd);
         TryList(Path.Combine(cwd, "crash"));
         TryList("/switch");
@@ -107,6 +133,23 @@ internal static class Program
         TryList("/");
 
         return null;
+    }
+
+    private static void TryListGame(string root)
+    {
+        TryList(Path.Combine(root, "game"));
+        var game = Path.Combine(root, "game");
+        if (!Directory.Exists(game))
+            return;
+        try
+        {
+            foreach (var d in Directory.GetDirectories(game))
+                TryList(d);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Switch] TryListGame: {ex.Message}");
+        }
     }
 
     private static void TryList(string dir)
