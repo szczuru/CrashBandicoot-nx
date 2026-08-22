@@ -10,7 +10,6 @@ public sealed class SwitchAudio
         _sampleRate = sampleRate;
         _channels = channels;
         Console.WriteLine($"[SwitchAudio] Init {sampleRate} Hz, ch={channels}");
-        // TODO: SDL_OpenAudioDevice / libnx audio
     }
 
     public void SubmitPcm(ReadOnlySpan<short> interleavedStereo)
@@ -18,7 +17,6 @@ public sealed class SwitchAudio
         _ = interleavedStereo;
         _ = _sampleRate;
         _ = _channels;
-        // TODO: queue PCM
     }
 
     public void SetVolume(float volume01)
