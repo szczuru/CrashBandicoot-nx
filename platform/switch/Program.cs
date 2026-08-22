@@ -16,7 +16,7 @@ internal static class Program
             }
             catch
             {
-                // mono-nx / hbmenu — CWD może być już ustawione (np. /switch)
+                // mono-nx
             }
 
             var cwd = Directory.GetCurrentDirectory();
@@ -46,7 +46,6 @@ internal static class Program
                 Console.WriteLine($"[Switch] Znaleziono .cue: {cuePath}");
             }
 
-            // Writable root na SD (obok DLL) — save/game/logs
             var dataRoot = cwd;
             try
             {
@@ -59,11 +58,15 @@ internal static class Program
                 Console.WriteLine($"[Switch] dirs: {ex.Message}");
             }
 
+            // Probe Runtime obok hosta
+            var runtimeBesideHost = Path.Combine(dataRoot, "RecompOne.Runtime.dll");
+            Console.WriteLine($"[Switch] RecompOne.Runtime.dll @ host: exists={File.Exists(runtimeBesideHost)} path={runtimeBesideHost}");
+
             var gameDll = GameAssemblyLoader.FindGameDll(dataRoot);
             if (gameDll is null)
             {
                 Console.WriteLine("[Switch] Brak game.recomp.dll pod /switch/game/...");
-                Console.WriteLine("[Switch] Skopiuj z PC folder game/<fingerprint>/ po udanym --prepare / starcie gry.");
+                Console.WriteLine("[Switch] Skopiuj z PC folder game/<fingerprint>/ po prepare.");
                 TryListGame(dataRoot);
             }
             else
@@ -81,7 +84,7 @@ internal static class Program
             using var host = new SwitchPlatformHost();
             host.Initialize();
 
-            Console.WriteLine("[Switch] Host OK. Podłącz RecompOne.Runtime Entry gdy Inspect przejdzie.");
+            Console.WriteLine("[Switch] Host OK (smoke). Entry.Run po udanym Inspect + Runtime.");
             host.RunSmokeLoop(seconds: 2);
 
             host.Shutdown();
