@@ -12,7 +12,7 @@ endif()
 include("$ENV{VITASDK}/share/vita.cmake" REQUIRED)
 
 set(VITA_APP_NAME "Crash Bandicoot Recomp")
-set(VITA_TITLEID  "CRASH0001")  # zmień na unikalny 9 znaków (A-Z0-9)
+set(VITA_TITLEID  "CRASHREC1")  # zmień na unikalny 9 znaków (A-Z0-9)
 set(VITA_VERSION  "01.00")
 
 add_executable(${PROJECT_NAME}
