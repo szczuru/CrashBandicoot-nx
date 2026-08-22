@@ -3,10 +3,13 @@ using static SDL2.SDL;
 namespace CrashBandicoot.Switch;
 
 /// <summary>
-/// Szybki present: VRAM RGB555 → SDL texture (bez konwersji do RGBA).
+/// Present SDL2: poprawne kolory PS1 (LUT RGB555→RGBA) + tańszy present.
 /// </summary>
 public sealed class SwitchGraphics
 {
+    // PS1: R=bit0-4, G=5-9, B=10-14 → packed RGBA8888 (byte order pod ABGR8888 LE)
+    private static readonly uint[] Rgb555ToRgba = CreateLut();
+
     private IntPtr _window;
     private IntPtr _renderer;
     private IntPtr _texture;
@@ -14,14 +17,40 @@ public sealed class SwitchGraphics
     private int _texH;
     private bool _ready;
     private int _framesPresented;
-    private ushort[]? _tight; // gęsty bufor dispW*dispH (pitch = width)
+    private int _blitCalls;
+    private uint[]? _rgba32; // packed pixels
+
+    /// <summary>Present na ekran co N wywołań Blit (2 = co druga klatka gry).</summary>
+    public int PresentEvery { get; set; } = 2;
 
     public bool Ready => _ready;
     public int FramesPresented => _framesPresented;
 
+    private static uint[] CreateLut()
+    {
+        var lut = new uint[65536];
+        for (int p = 0; p < 65536; p++)
+        {
+            int r = (p & 0x1F) << 3;
+            int g = ((p >> 5) & 0x1F) << 3;
+            int b = ((p >> 10) & 0x1F) << 3;
+            // rozciągnij 5→8 bit (opcjonalnie)
+            r |= r >> 5;
+            g |= g >> 5;
+            b |= b >> 5;
+            // bajty w pamięci: R,G,B,A → na LE często SDL_PIXELFORMAT_ABGR8888
+            lut[p] = (uint)(r | (g << 8) | (b << 16) | (0xFF << 24));
+        }
+        return lut;
+    }
+
     public void Init(int width, int height)
     {
-        Console.WriteLine($"[SwitchGraphics] SDL Init {width}x{height}");
+        // Mniejsze okno = mniej pracy GPU przy scale
+        if (width > 960) width = 960;
+        if (height > 540) height = 540;
+
+        Console.WriteLine($"[SwitchGraphics] SDL Init {width}x{height}, PresentEvery={PresentEvery}");
 
         if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) != 0)
         {
@@ -43,10 +72,8 @@ public sealed class SwitchGraphics
             return;
         }
 
-        // nearest = tańsze skalowanie 512x240 → 1280x720
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
-        // Najpierw accelerated BEZ vsync — limituje FrameClock / gra, nie SDL
         _renderer = SDL_CreateRenderer(
             _window,
             -1,
@@ -67,7 +94,7 @@ public sealed class SwitchGraphics
         }
 
         _ready = true;
-        Console.WriteLine("[SwitchGraphics] SDL OK (no vsync flag)");
+        Console.WriteLine("[SwitchGraphics] SDL OK");
     }
 
     public void BlitFromVram(
@@ -83,6 +110,11 @@ public sealed class SwitchGraphics
         if (!_ready || vram is null || dispW <= 0 || dispH <= 0)
             return;
 
+        _blitCalls++;
+        // Pomiń drogi SDL present — gra i tak woła Present co klatkę
+        if (PresentEvery > 1 && (_blitCalls % PresentEvery) != 0)
+            return;
+
         dispX = Math.Clamp(dispX, 0, vramWidth - 1);
         dispY = Math.Clamp(dispY, 0, vramHeight - 1);
         dispW = Math.Min(dispW, vramWidth - dispX);
@@ -91,31 +123,25 @@ public sealed class SwitchGraphics
             return;
 
         EnsureTexture(dispW, dispH);
-        if (_texture == IntPtr.Zero || _tight is null)
+        if (_texture == IntPtr.Zero || _rgba32 is null)
             return;
 
-        // Skopiuj tylko region display do gęstego bufora (pitch = dispW)
-        // Zamiast konwersji RGBA — zostaje RGB555
-        var tight = _tight;
-        int needed = dispW * dispH;
-        if (tight.Length < needed)
-        {
-            _tight = tight = new ushort[needed];
-        }
+        var lut = Rgb555ToRgba;
+        var dst = _rgba32;
+        int di = 0;
 
         for (int y = 0; y < dispH; y++)
         {
             int src = (dispY + y) * vramWidth + dispX;
-            int dst = y * dispW;
-            Array.Copy(vram, src, tight, dst, dispW);
+            for (int x = 0; x < dispW; x++)
+                dst[di++] = lut[vram[src + x] & 0x7FFF];
         }
 
         unsafe
         {
-            fixed (ushort* p = tight)
+            fixed (uint* p = dst)
             {
-                // pitch w bajtach = dispW * 2
-                if (SDL_UpdateTexture(_texture, IntPtr.Zero, (IntPtr)p, dispW * 2) != 0)
+                if (SDL_UpdateTexture(_texture, IntPtr.Zero, (IntPtr)p, dispW * 4) != 0)
                 {
                     if (_framesPresented < 3)
                         Console.WriteLine($"[SwitchGraphics] UpdateTexture: {SDL_GetError()}");
@@ -128,11 +154,8 @@ public sealed class SwitchGraphics
         SDL_RenderCopy(_renderer, _texture, IntPtr.Zero, IntPtr.Zero);
         SDL_RenderPresent(_renderer);
 
-        // Max kilka eventów, bez pełnego drenażu co klatkę
-        for (int i = 0; i < 4 && SDL_PollEvent(out _) != 0; i++) { }
-
         _framesPresented++;
-        if (_framesPresented == 1 || _framesPresented % 300 == 0)
+        if (_framesPresented == 1 || _framesPresented % 120 == 0)
             Console.WriteLine($"[SwitchGraphics] present #{_framesPresented} {dispW}x{dispH}");
 
         _ = is24Bit;
@@ -150,11 +173,9 @@ public sealed class SwitchGraphics
             _texture = IntPtr.Zero;
         }
 
-        // 15-bit — bez konwersji CPU do 32-bit
-        // Jeśli kolory złe: spróbuj SDL_PIXELFORMAT_BGR555 / ARGB1555 / RGBA5551
         _texture = SDL_CreateTexture(
             _renderer,
-            SDL_PIXELFORMAT_RGB555,
+            SDL_PIXELFORMAT_ABGR8888,
             (int)SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING,
             w,
             h);
@@ -163,7 +184,7 @@ public sealed class SwitchGraphics
         {
             _texture = SDL_CreateTexture(
                 _renderer,
-                SDL_PIXELFORMAT_BGR555,
+                SDL_PIXELFORMAT_RGBA8888,
                 (int)SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING,
                 w,
                 h);
@@ -171,14 +192,14 @@ public sealed class SwitchGraphics
 
         if (_texture == IntPtr.Zero)
         {
-            Console.WriteLine($"[SwitchGraphics] CreateTexture 555 FAIL: {SDL_GetError()}");
+            Console.WriteLine($"[SwitchGraphics] CreateTexture FAIL: {SDL_GetError()}");
             return;
         }
 
         _texW = w;
         _texH = h;
-        _tight = new ushort[w * h];
-        Console.WriteLine($"[SwitchGraphics] texture RGB555 {w}x{h}");
+        _rgba32 = new uint[w * h];
+        Console.WriteLine($"[SwitchGraphics] texture RGBA {w}x{h}");
     }
 
     public void Present(ReadOnlySpan<byte> unused) => _ = unused;
@@ -193,6 +214,6 @@ public sealed class SwitchGraphics
         if (_window != IntPtr.Zero) { SDL_DestroyWindow(_window); _window = IntPtr.Zero; }
         if (_ready) SDL_Quit();
         _ready = false;
-        _tight = null;
+        _rgba32 = null;
     }
 }
