@@ -1,11 +1,10 @@
 using RecompOne.Runtime;
-using RecompOne.Runtime.Hle;
 
 namespace CrashBandicoot.Switch;
 
 /// <summary>
-/// Host bez Silk/GLFW/OpenAL — wymagany na mono-nx / Switch.
-/// Runtime.SetPlatformHost(this) PRZED Entry.Run.
+/// IRuntimePlatformHost bez Silk/GLFW/OpenAL.
+/// Present: soft blit z Gpu.Vram.
 /// </summary>
 public sealed class SwitchPlatformHost : IRuntimePlatformHost, IDisposable
 {
@@ -14,7 +13,6 @@ public sealed class SwitchPlatformHost : IRuntimePlatformHost, IDisposable
     private readonly SwitchInput _input = new();
     private bool _alive;
     private int _presentCount;
-    private long _lastLogPresent;
 
     public SwitchGraphics Graphics => _graphics;
     public SwitchAudio Audio => _audio;
@@ -27,7 +25,6 @@ public sealed class SwitchPlatformHost : IRuntimePlatformHost, IDisposable
         _audio.Init(44100, 2);
         _alive = true;
         _presentCount = 0;
-        _lastLogPresent = 0;
     }
 
     public void WaitForValidDisc()
@@ -38,47 +35,50 @@ public sealed class SwitchPlatformHost : IRuntimePlatformHost, IDisposable
     public void Present(Gpu? gpu)
     {
         _presentCount++;
+        _ = _input.ReadPad0();
 
-        // Odśwież pad (Runtime i tak woła Bios pad; tu opcjonalnie virtual)
+        if (gpu is null || !gpu.DisplayEnabled)
+        {
+            if (_presentCount <= 5 || _presentCount % 120 == 0)
+                Console.WriteLine($"[SwitchHost] Present #{_presentCount} (gpu null or display off)");
+            Thread.Sleep(1);
+            return;
+        }
+
         try
         {
-            var buttons = _input.ReadPad0();
-            // Hardware.Controller.SetVirtualPadState — jeśli dostępne w Twojej wersji Runtime
-            // RecompOne.Runtime.Hardware.Controller.SetVirtualPadState(buttons);
-            _ = buttons;
+            var vram = gpu.Vram;
+            int vw = Gpu.VramWidth;
+            int vh = Gpu.VramHeight;
+            _graphics.BlitFromVram(
+                vram,
+                vw,
+                vh,
+                gpu.DisplayX,
+                gpu.DisplayY,
+                gpu.DisplayWidth,
+                gpu.DisplayHeight,
+                gpu.Display24Bit);
+            _graphics.LogFrameIfNeeded(_presentCount);
         }
-        catch
+        catch (Exception ex)
         {
-            // ignore
+            if (_presentCount <= 3 || _presentCount % 120 == 0)
+                Console.WriteLine($"[SwitchHost] Blit error: {ex.Message}");
         }
 
-        if (gpu != null && gpu.DisplayEnabled)
+        if (_presentCount % 60 == 0)
         {
-            // Na razie tylko log co ~60 presentów — bez prawdziwego blit
-            if (_presentCount - _lastLogPresent >= 60)
-            {
-                _lastLogPresent = _presentCount;
-                Console.WriteLine(
-                    $"[SwitchHost] Present #{_presentCount} display={gpu.DisplayWidth}x{gpu.DisplayHeight} " +
-                    $"at ({gpu.DisplayX},{gpu.DisplayY}) 24bit={gpu.Display24Bit}");
-            }
-
-            _graphics.Present(ReadOnlySpan<byte>.Empty);
-        }
-        else if (_presentCount <= 5 || _presentCount % 120 == 0)
-        {
-            Console.WriteLine($"[SwitchHost] Present #{_presentCount} (gpu null or display off)");
+            Console.WriteLine(
+                $"[SwitchHost] Present #{_presentCount} display={gpu.DisplayWidth}x{gpu.DisplayHeight} " +
+                $"at ({gpu.DisplayX},{gpu.DisplayY}) 24bit={gpu.Display24Bit}");
         }
 
-        // Lekki throttle, żeby nie zjeść 100% CPU na Switchu
         Thread.Sleep(1);
     }
 
     public void AttachAudio(Spu? spu)
     {
-        if (spu is null)
-            return;
-        // TODO: SPU → PCM → native audio
         _ = spu;
     }
 
