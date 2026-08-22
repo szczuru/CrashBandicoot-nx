@@ -1,0 +1,44 @@
+name: Switch
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "platform/switch/**"
+      - "RecompOne.Runtime/**"
+      - "shared/**"
+      - ".github/workflows/switch.yml"
+  pull_request:
+    paths:
+      - "platform/switch/**"
+      - "RecompOne.Runtime/**"
+      - "shared/**"
+  workflow_dispatch:
+
+jobs:
+  build-managed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore platform/switch/CrashBandicoot.Switch.csproj
+
+      - name: Build
+        run: |
+          dotnet build platform/switch/CrashBandicoot.Switch.csproj \
+            -c Release \
+            -o out/switch-managed \
+            --no-restore
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: switch-managed
+          path: out/switch-managed/
+          if-no-files-found: error
