@@ -2,8 +2,8 @@ namespace CrashBandicoot.Switch;
 
 public sealed class SwitchInput
 {
-    public ushort ReadPad0()
-    {
-        return 0;
-    }
+    /// <summary>
+    /// Bitmaska w stylu PS1 digital pad (na razie 0 — brak natywnego padu).
+    /// </summary>
+    public ushort ReadPad0() => 0;
 }
