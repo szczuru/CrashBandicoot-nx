@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
-    <!-- Jak Runtime wymaga 10: zmień na net10.0 i testuj lokalnie -->
+    <!-- Runtime upstream to net10.0 — musi się zgadzać -->
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>CrashBandicoot.Switch</RootNamespace>
@@ -10,9 +10,7 @@
     <PublishAot>false</PublishAot>
   </PropertyGroup>
 
-  <!-- WŁĄCZ dopiero gdy net10 + Silk nie blokują mono-nx:
   <ItemGroup>
     <ProjectReference Include="..\..\RecompOne.Runtime\RecompOne.Runtime.csproj" />
   </ItemGroup>
-  -->
 </Project>
