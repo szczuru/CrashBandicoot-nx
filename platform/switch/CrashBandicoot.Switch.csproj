@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>CrashBandicoot.Switch</RootNamespace>
+    <AssemblyName>CrashBandicoot.Switch</AssemblyName>
+    <!-- mono-nx: portable, no Windows-only APIs -->
+    <PublishAot>false</PublishAot>
+  </PropertyGroup>
+
+  <!--
+    Podłącz Runtime gdy ścieżka i zależności desktop/Android nie blokują builda:
+    <ItemGroup>
+      <ProjectReference Include="..\..\RecompOne.Runtime\RecompOne.Runtime.csproj" />
+    </ItemGroup>
+
+    Na start CI buduje same stuby hosta (bez Runtime).
+  -->
+</Project>
