@@ -1,33 +1,76 @@
+using System.Runtime.InteropServices;
+using static SDL2.SDL;
+
 namespace CrashBandicoot.Switch;
 
 /// <summary>
-/// Soft present: konwersja PS1 VRAM (RGB555 / 24-bit) → RGBA8888.
-/// Docelowo: upload do framebuffera libnx / SDL. Na razie bufor + checksum w logu.
+/// Present przez SDL2 wbudowane w mono-nx (jak explorer_demo).
+/// VRAM PS1 → tekstura → fullscreen 1280x720.
 /// </summary>
 public sealed class SwitchGraphics
 {
-    private int _width;
-    private int _height;
+    private IntPtr _window;
+    private IntPtr _renderer;
+    private IntPtr _texture;
+    private int _texW;
+    private int _texH;
+    private bool _ready;
+    private int _framesPresented;
     private byte[]? _rgba;
-    private int _lastW;
-    private int _lastH;
-    private uint _lastChecksum;
-    private int _framesConverted;
 
-    public int Width => _width;
-    public int Height => _height;
-    public ReadOnlySpan<byte> LastRgba => _rgba ?? ReadOnlySpan<byte>.Empty;
-    public int FramesConverted => _framesConverted;
+    public bool Ready => _ready;
+    public int FramesPresented => _framesPresented;
 
     public void Init(int width, int height)
     {
-        _width = width;
-        _height = height;
-        Console.WriteLine($"[SwitchGraphics] Init {width}x{height}");
+        Console.WriteLine($"[SwitchGraphics] SDL Init target {width}x{height}");
+
+        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) != 0)
+        {
+            Console.WriteLine($"[SwitchGraphics] SDL_Init FAIL: {SDL_GetError()}");
+            return;
+        }
+
+        _window = SDL_CreateWindow(
+            "Crash Bandicoot",
+            SDL_WINDOWPOS_UNDEFINED,
+            SDL_WINDOWPOS_UNDEFINED,
+            width,
+            height,
+            0);
+
+        if (_window == IntPtr.Zero)
+        {
+            Console.WriteLine($"[SwitchGraphics] SDL_CreateWindow FAIL: {SDL_GetError()}");
+            return;
+        }
+
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+
+        _renderer = SDL_CreateRenderer(
+            _window,
+            -1,
+            (uint)(SDL_RendererFlags.SDL_RENDERER_ACCELERATED |
+                   SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC));
+
+        if (_renderer == IntPtr.Zero)
+        {
+            // fallback software
+            _renderer = SDL_CreateRenderer(_window, -1, (uint)SDL_RendererFlags.SDL_RENDERER_SOFTWARE);
+        }
+
+        if (_renderer == IntPtr.Zero)
+        {
+            Console.WriteLine($"[SwitchGraphics] SDL_CreateRenderer FAIL: {SDL_GetError()}");
+            return;
+        }
+
+        _ready = true;
+        Console.WriteLine("[SwitchGraphics] SDL window+renderer OK");
     }
 
     /// <summary>
-    /// Kopiuje region display z PS1 VRAM (1024×512, ushort RGB555) do lokalnego RGBA.
+    /// Konwersja VRAM + upload do tekstury + present.
     /// </summary>
     public void BlitFromVram(
         ushort[] vram,
@@ -39,7 +82,7 @@ public sealed class SwitchGraphics
         int dispH,
         bool is24Bit)
     {
-        if (vram is null || dispW <= 0 || dispH <= 0)
+        if (!_ready || vram is null || dispW <= 0 || dispH <= 0)
             return;
 
         dispX = Math.Clamp(dispX, 0, vramWidth - 1);
@@ -49,88 +92,115 @@ public sealed class SwitchGraphics
         if (dispW <= 0 || dispH <= 0)
             return;
 
+        EnsureTexture(dispW, dispH);
+
         var need = dispW * dispH * 4;
         if (_rgba is null || _rgba.Length < need)
             _rgba = new byte[need];
 
-        uint checksum = 2166136261u;
         var dst = _rgba;
-
-        if (!is24Bit)
+        for (int y = 0; y < dispH; y++)
         {
-            // 15-bit: 1 texel = 1 ushort, packed BGR555
-            for (int y = 0; y < dispH; y++)
+            int srcRow = (dispY + y) * vramWidth + dispX;
+            int dstRow = y * dispW * 4;
+            for (int x = 0; x < dispW; x++)
             {
-                int srcRow = (dispY + y) * vramWidth + dispX;
-                int dstRow = y * dispW * 4;
-                for (int x = 0; x < dispW; x++)
-                {
-                    ushort p = vram[srcRow + x];
-                    int r = (p & 0x1F) << 3;
-                    int g = ((p >> 5) & 0x1F) << 3;
-                    int b = ((p >> 10) & 0x1F) << 3;
-                    int o = dstRow + x * 4;
-                    dst[o] = (byte)r;
-                    dst[o + 1] = (byte)g;
-                    dst[o + 2] = (byte)b;
-                    dst[o + 3] = 255;
-                    checksum ^= (uint)p;
-                    checksum *= 16777619u;
-                }
+                int si = srcRow + x;
+                if ((uint)si >= (uint)vram.Length)
+                    break;
+                ushort p = vram[si];
+                int r = (p & 0x1F) << 3;
+                int g = ((p >> 5) & 0x1F) << 3;
+                int b = ((p >> 10) & 0x1F) << 3;
+                int o = dstRow + x * 4;
+                dst[o] = (byte)r;
+                dst[o + 1] = (byte)g;
+                dst[o + 2] = (byte)b;
+                dst[o + 3] = 255;
             }
         }
-        else
+
+        _ = is24Bit;
+
+        // Upload RGBA32 → tekstura
+        unsafe
         {
-            // 24-bit: 2 pixele = 3 ushorty (uproszczenie layoutu PS1)
-            for (int y = 0; y < dispH; y++)
+            fixed (byte* ptr = dst)
             {
-                int srcRow = (dispY + y) * vramWidth + dispX;
-                int dstRow = y * dispW * 4;
-                for (int x = 0; x < dispW; x++)
+                if (SDL_UpdateTexture(_texture, IntPtr.Zero, (IntPtr)ptr, dispW * 4) != 0)
                 {
-                    int si = srcRow + x;
-                    if (si >= vram.Length)
-                        break;
-                    ushort p = vram[si];
-                    // fallback: traktuj jak 15-bit aż pełny 24-bit path będzie dopięty
-                    int r = (p & 0x1F) << 3;
-                    int g = ((p >> 5) & 0x1F) << 3;
-                    int b = ((p >> 10) & 0x1F) << 3;
-                    int o = dstRow + x * 4;
-                    dst[o] = (byte)r;
-                    dst[o + 1] = (byte)g;
-                    dst[o + 2] = (byte)b;
-                    dst[o + 3] = 255;
-                    checksum ^= (uint)p;
-                    checksum *= 16777619u;
+                    if (_framesPresented < 3)
+                        Console.WriteLine($"[SwitchGraphics] UpdateTexture: {SDL_GetError()}");
+                    return;
                 }
             }
         }
 
-        _lastW = dispW;
-        _lastH = dispH;
-        _lastChecksum = checksum;
-        _framesConverted++;
+        SDL_SetRenderDrawColor(_renderer, 0, 0, 0, 255);
+        SDL_RenderClear(_renderer);
+        SDL_RenderCopy(_renderer, _texture, IntPtr.Zero, IntPtr.Zero); // full window, scale
+        SDL_RenderPresent(_renderer);
 
-        // TODO: natywny present (libnx framebuffer / SDL texture) z _rgba[_lastW*_lastH*4]
+        // Eventy (żeby okno/os nie uznały app za martwą)
+        while (SDL_PollEvent(out _) != 0) { }
+
+        _framesPresented++;
+        if (_framesPresented == 1 || _framesPresented % 60 == 0)
+            Console.WriteLine($"[SwitchGraphics] SDL present #{_framesPresented} src={dispW}x{dispH}");
     }
 
-    public void LogFrameIfNeeded(int presentCount)
+    private void EnsureTexture(int w, int h)
     {
-        if (presentCount % 60 != 0 || _framesConverted == 0)
+        if (_texture != IntPtr.Zero && _texW == w && _texH == h)
             return;
-        Console.WriteLine(
-            $"[SwitchGraphics] softframe #{_framesConverted} {_lastW}x{_lastH} checksum=0x{_lastChecksum:X8} rgbaBytes={_lastW * _lastH * 4}");
+
+        if (_texture != IntPtr.Zero)
+        {
+            SDL_DestroyTexture(_texture);
+            _texture = IntPtr.Zero;
+        }
+
+        _texture = SDL_CreateTexture(
+            _renderer,
+            SDL_PIXELFORMAT_ABGR8888, // R,G,B,A w pamięci jako byte order little-endian często ABGR dla RGBA layout
+            (int)SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING,
+            w,
+            h);
+
+        if (_texture == IntPtr.Zero)
+        {
+            // fallback format
+            _texture = SDL_CreateTexture(
+                _renderer,
+                SDL_PIXELFORMAT_RGBA8888,
+                (int)SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING,
+                w,
+                h);
+        }
+
+        if (_texture == IntPtr.Zero)
+        {
+            Console.WriteLine($"[SwitchGraphics] CreateTexture FAIL: {SDL_GetError()}");
+            return;
+        }
+
+        _texW = w;
+        _texH = h;
+        Console.WriteLine($"[SwitchGraphics] texture {w}x{h}");
     }
 
-    public void Present(ReadOnlySpan<byte> unused)
-    {
-        _ = unused;
-    }
+    public void Present(ReadOnlySpan<byte> unused) => _ = unused;
+
+    public void LogFrameIfNeeded(int presentCount) { }
 
     public void Shutdown()
     {
-        Console.WriteLine($"[SwitchGraphics] Shutdown (converted={_framesConverted})");
+        Console.WriteLine($"[SwitchGraphics] Shutdown (presented={_framesPresented})");
+        if (_texture != IntPtr.Zero) { SDL_DestroyTexture(_texture); _texture = IntPtr.Zero; }
+        if (_renderer != IntPtr.Zero) { SDL_DestroyRenderer(_renderer); _renderer = IntPtr.Zero; }
+        if (_window != IntPtr.Zero) { SDL_DestroyWindow(_window); _window = IntPtr.Zero; }
+        if (_ready) SDL_Quit();
+        _ready = false;
         _rgba = null;
     }
 }
