@@ -13,4 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\RecompOne.Runtime\RecompOne.Runtime.csproj" />
   </ItemGroup>
+<ItemGroup>
+  <Compile Include="sdl2-cs\src\**\*.cs" />
+</ItemGroup>
 </Project>
