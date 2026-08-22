@@ -4,8 +4,8 @@ using static SDL2.SDL;
 namespace CrashBandicoot.Switch;
 
 /// <summary>
-/// Present przez SDL2 wbudowane w mono-nx (jak explorer_demo).
-/// VRAM PS1 → tekstura → fullscreen 1280x720.
+/// Present przez SDL2 (mono-nx, jak explorer_demo).
+/// VRAM PS1 → tekstura streaming → fullscreen.
 /// </summary>
 public sealed class SwitchGraphics
 {
@@ -47,16 +47,19 @@ public sealed class SwitchGraphics
 
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
+        // Typ enum — nie uint (SDL2-CS)
         _renderer = SDL_CreateRenderer(
             _window,
             -1,
-            (uint)(SDL_RendererFlags.SDL_RENDERER_ACCELERATED |
-                   SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC));
+            SDL_RendererFlags.SDL_RENDERER_ACCELERATED |
+            SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
 
         if (_renderer == IntPtr.Zero)
         {
-            // fallback software
-            _renderer = SDL_CreateRenderer(_window, -1, (uint)SDL_RendererFlags.SDL_RENDERER_SOFTWARE);
+            _renderer = SDL_CreateRenderer(
+                _window,
+                -1,
+                SDL_RendererFlags.SDL_RENDERER_SOFTWARE);
         }
 
         if (_renderer == IntPtr.Zero)
@@ -69,9 +72,6 @@ public sealed class SwitchGraphics
         Console.WriteLine("[SwitchGraphics] SDL window+renderer OK");
     }
 
-    /// <summary>
-    /// Konwersja VRAM + upload do tekstury + present.
-    /// </summary>
     public void BlitFromVram(
         ushort[] vram,
         int vramWidth,
@@ -93,6 +93,8 @@ public sealed class SwitchGraphics
             return;
 
         EnsureTexture(dispW, dispH);
+        if (_texture == IntPtr.Zero)
+            return;
 
         var need = dispW * dispH * 4;
         if (_rgba is null || _rgba.Length < need)
@@ -122,7 +124,6 @@ public sealed class SwitchGraphics
 
         _ = is24Bit;
 
-        // Upload RGBA32 → tekstura
         unsafe
         {
             fixed (byte* ptr = dst)
@@ -138,10 +139,9 @@ public sealed class SwitchGraphics
 
         SDL_SetRenderDrawColor(_renderer, 0, 0, 0, 255);
         SDL_RenderClear(_renderer);
-        SDL_RenderCopy(_renderer, _texture, IntPtr.Zero, IntPtr.Zero); // full window, scale
+        SDL_RenderCopy(_renderer, _texture, IntPtr.Zero, IntPtr.Zero);
         SDL_RenderPresent(_renderer);
 
-        // Eventy (żeby okno/os nie uznały app za martwą)
         while (SDL_PollEvent(out _) != 0) { }
 
         _framesPresented++;
@@ -162,14 +162,13 @@ public sealed class SwitchGraphics
 
         _texture = SDL_CreateTexture(
             _renderer,
-            SDL_PIXELFORMAT_ABGR8888, // R,G,B,A w pamięci jako byte order little-endian często ABGR dla RGBA layout
+            SDL_PIXELFORMAT_ABGR8888,
             (int)SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING,
             w,
             h);
 
         if (_texture == IntPtr.Zero)
         {
-            // fallback format
             _texture = SDL_CreateTexture(
                 _renderer,
                 SDL_PIXELFORMAT_RGBA8888,
@@ -196,10 +195,23 @@ public sealed class SwitchGraphics
     public void Shutdown()
     {
         Console.WriteLine($"[SwitchGraphics] Shutdown (presented={_framesPresented})");
-        if (_texture != IntPtr.Zero) { SDL_DestroyTexture(_texture); _texture = IntPtr.Zero; }
-        if (_renderer != IntPtr.Zero) { SDL_DestroyRenderer(_renderer); _renderer = IntPtr.Zero; }
-        if (_window != IntPtr.Zero) { SDL_DestroyWindow(_window); _window = IntPtr.Zero; }
-        if (_ready) SDL_Quit();
+        if (_texture != IntPtr.Zero)
+        {
+            SDL_DestroyTexture(_texture);
+            _texture = IntPtr.Zero;
+        }
+        if (_renderer != IntPtr.Zero)
+        {
+            SDL_DestroyRenderer(_renderer);
+            _renderer = IntPtr.Zero;
+        }
+        if (_window != IntPtr.Zero)
+        {
+            SDL_DestroyWindow(_window);
+            _window = IntPtr.Zero;
+        }
+        if (_ready)
+            SDL_Quit();
         _ready = false;
         _rgba = null;
     }
