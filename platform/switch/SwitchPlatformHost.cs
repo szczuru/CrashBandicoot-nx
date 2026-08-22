@@ -17,7 +17,8 @@ public sealed class SwitchPlatformHost : IRuntimePlatformHost, IDisposable
     public void Initialize(string title)
     {
         Console.WriteLine($"[SwitchHost] Initialize: {title}");
-        _graphics.Init(1280, 720);
+        _graphics.PresentEvery = 2; // 3 = jeszcze mniej SDL, bardziej „film”
+        _graphics.Init(960, 540);
         _audio.Init(44100, 2);
         _alive = true;
         _presentCount = 0;
