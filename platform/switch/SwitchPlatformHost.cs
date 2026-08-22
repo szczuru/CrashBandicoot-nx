@@ -1,9 +1,7 @@
 namespace CrashBandicoot.Switch;
 
 /// <summary>
-/// Stub hosta Switch. Docelowo implementuje IRuntimePlatformHost z RecompOne.Runtime
-/// (present VRAM, audio PCM, pad state, ścieżki save/mods).
-/// Wzoruj się na AndroidPlatformHost / desktop Silk host z upstreamu.
+/// Stub hosta Switch. Docelowo: IRuntimePlatformHost (Present/Audio/Init).
 /// </summary>
 public sealed class SwitchPlatformHost : IDisposable
 {
@@ -24,7 +22,6 @@ public sealed class SwitchPlatformHost : IDisposable
         _running = true;
     }
 
-    /// <summary>Tymczasowa pętla bez gry — test CI i mono-nx.</summary>
     public void RunSmokeLoop(int seconds = 2)
     {
         var until = DateTime.UtcNow.AddSeconds(seconds);
