@@ -58,7 +58,6 @@ internal static class Program
             var asm = GameAssemblyLoader.LoadGame(gameDll);
             GameAssemblyLoader.Inspect(asm);
 
-            // === KLUCZ: zarejestruj host PRZED Entry.Run ===
             using var host = new SwitchPlatformHost();
             Runtime.SetPlatformHost(host);
             Console.WriteLine("[Switch] Runtime.SetPlatformHost(SwitchPlatformHost) OK");
