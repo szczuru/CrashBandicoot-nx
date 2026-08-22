@@ -7,6 +7,7 @@
     <RootNamespace>CrashBandicoot.Switch</RootNamespace>
     <AssemblyName>CrashBandicoot.Switch</AssemblyName>
     <PublishAot>false</PublishAot>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
