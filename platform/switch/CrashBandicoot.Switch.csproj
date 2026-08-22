@@ -13,7 +13,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\RecompOne.Runtime\RecompOne.Runtime.csproj" />
   </ItemGroup>
-<ItemGroup>
-  <Compile Include="sdl2-cs\src\**\*.cs" />
-</ItemGroup>
+
+  <!-- NIE dodawaj Compile Include na sdl2-cs — SDK i tak je bierze z platform/switch/**/*.cs -->
 </Project>
