@@ -1,0 +1,50 @@
+name: Build RecompOne.Runtime
+
+# Tylko ręcznie: Actions → Build RecompOne.Runtime → Run workflow
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: "Build configuration"
+        required: true
+        default: "Release"
+        type: choice
+        options:
+          - Release
+          - Debug
+
+jobs:
+  build-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore RecompOne.Runtime/RecompOne.Runtime.csproj
+
+      - name: Build
+        run: |
+          dotnet build RecompOne.Runtime/RecompOne.Runtime.csproj \
+            -c ${{ inputs.configuration }} \
+            --no-restore \
+            -o out/runtime
+
+      - name: List output
+        run: |
+          echo "=== out/runtime ==="
+          find out/runtime -type f | sort
+          ls -la out/runtime/RecompOne.Runtime.dll || true
+
+      - name: Upload RecompOne.Runtime + dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: RecompOne.Runtime-${{ inputs.configuration }}
+          path: out/runtime/
+          if-no-files-found: error
+          retention-days: 14
