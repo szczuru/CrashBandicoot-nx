@@ -3,7 +3,7 @@ namespace CrashBandicoot.Switch;
 internal static class Program
 {
     // Domyślna lokalizacja disc na SD (użytkownik dostarcza własny dump)
-    private const string DefaultCueRelative = "crash/Crash Bandicoot.cue";
+    private const string DefaultCueRelative = "switch/crash/Crash Bandicoot.cue";
 
     private static int Main(string[] args)
     {
