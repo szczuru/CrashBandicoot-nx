@@ -75,8 +75,7 @@ public static class GameAssemblyLoader
         Console.WriteLine($"[Switch] Loading game assembly: {dllPath}");
         try
         {
-            var cwd = Directory.GetCurrentDirectory();
-            LogDependencyHints(cwd, dllPath);
+            LogDependencyHints(Directory.GetCurrentDirectory(), dllPath);
         }
         catch { /* ignore */ }
 
@@ -118,7 +117,7 @@ public static class GameAssemblyLoader
 
         if (entryType is null)
         {
-            Console.WriteLine("[Switch] Brak Entry/Program. Sample types:");
+            Console.WriteLine("[Switch] Brak Entry/Program. Sample:");
             foreach (var t in types.Take(30))
                 Console.WriteLine($"  {t.FullName}");
             return;
@@ -133,9 +132,6 @@ public static class GameAssemblyLoader
         Console.WriteLine("[Switch] Inspect OK.");
     }
 
-    /// <summary>
-    /// Wywołuje Recompiled.Entry.Run(IMemory, string cuePath).
-    /// </summary>
     public static void InvokeEntryRun(Assembly asm, IMemory memory, string cuePath)
     {
         Type? entryType = null;
