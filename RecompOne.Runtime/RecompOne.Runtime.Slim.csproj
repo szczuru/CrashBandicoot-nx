@@ -13,6 +13,11 @@
   <ItemGroup>
     <Compile Include="**/*.cs" />
 
+    <Compile Remove="Runtime.cs" />
+    <Compile Remove="Host/Cheats/**/*.cs" />
+    <Compile Remove="Host/Diagnostics/**/*.cs" />
+    <!-- FramePacing zostaje na razie (Present z niego korzysta) -->
+
     <Compile Remove="Host/Window/**/*.cs" />
     <Compile Remove="Host/Audio.cs" />
     <Compile Remove="Host/InputManager.cs" />
