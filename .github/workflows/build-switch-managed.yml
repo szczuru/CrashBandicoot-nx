@@ -1,0 +1,37 @@
+name: Build Switch managed (slim + host)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Build slim Runtime
+        run: |
+          if [ -f RecompOne.Runtime/RecompOne.Runtime.Slim.csproj ]; then
+            dotnet build RecompOne.Runtime/RecompOne.Runtime.Slim.csproj -c Release -o out/managed
+          else
+            dotnet build RecompOne.Runtime/RecompOne.Runtime.csproj -c Release -o out/managed
+          fi
+
+      - name: Build Switch host
+        run: |
+          dotnet build platform/switch/CrashBandicoot.Switch.csproj -c Release -o out/managed
+
+      - name: List
+        run: ls -la out/managed/*.dll
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: switch-managed-dlls
+          path: out/managed/*.dll
+          retention-days: 14
