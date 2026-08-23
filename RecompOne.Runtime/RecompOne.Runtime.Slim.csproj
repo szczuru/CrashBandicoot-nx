@@ -11,15 +11,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Wszystko z drzewa Runtime -->
     <Compile Include="**/*.cs" />
 
-    <!-- ===== DESKTOP / UI / PLATFORM-SPECIFIC — WYCIĘTE DLA SWITCH SLIM ===== -->
-
-    <!-- Host window / panele / ImGui -->
     <Compile Remove="Host/Window/**/*.cs" />
-
-    <!-- Desktop audio / input (Silk, OpenAL) -->
     <Compile Remove="Host/Audio.cs" />
     <Compile Remove="Host/InputManager.cs" />
     <Compile Remove="Host/**/Silk*.cs" />
@@ -27,28 +21,22 @@
     <Compile Remove="Host/**/*Glfw*.cs" />
     <Compile Remove="Host/**/*ImGui*.cs" />
 
-    <!-- Catalog / CD zależne od Modding (niepotrzebne na Switch slim) -->
+    <Compile Remove="Config/ConfigManager.cs" />
+    <Compile Remove="Config/KeyBindingNames.cs" />
+
+    <Compile Remove="Gpu/Hle/Gl/**/*.cs" />
+
+    <Compile Remove="Catalog/PngBgr555.cs" />
     <Compile Remove="Catalog/TextureReplacements.cs" />
     <Compile Remove="Catalog/TexturesCatalog.cs" />
     <Compile Remove="Cdrom/DiscOverlay.cs" />
 
-    <!-- Config zależny od ImGui / Silk / paneli -->
-    <Compile Remove="Config/ConfigManager.cs" />
-    <Compile Remove="Config/KeyBindingNames.cs" />
-
-    <!-- OpenGL HLE backend (Silk) — Switch używa soft VRAM + SDL present -->
-    <Compile Remove="Gpu/Hle/Gl/**/*.cs" />
-
-    <!-- Catalog PNG (StbImage) — niepotrzebne na konsoli do gry -->
-    <Compile Remove="Catalog/PngBgr555.cs" />
-
-    <!-- Modding (MonoMod, Roslyn) -->
+    <!-- cały folder Modding, potem doklejamy tylko stub -->
     <Compile Remove="Modding/**/*.cs" />
-
-    <!-- Ewentualne inne desktopowe ścieżki -->
     <Compile Remove="**/Desktop/**/*.cs" />
-  </ItemGroup>
 
-  <!-- Celowo BRAK PackageReference do Silk, ImGui, StbImage, MonoMod, Roslyn.
-       Jeśli coś jeszcze ich wymaga — dopisz kolejny Compile Remove, nie pakiet. -->
+    <!-- STUBY slim (jawny Include po Remove) -->
+    <Compile Include="SlimStubs/ModdingStubs.cs" />
+    <Compile Include="SlimStubs/TexturesCatalogStub.cs" />
+  </ItemGroup>
 </Project>
