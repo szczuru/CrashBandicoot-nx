@@ -2,21 +2,22 @@ namespace RecompOne.Runtime.Cdrom;
 
 public static class DiscOverlay
 {
-    public static bool TryOpen(string path, out Stream? stream)
+    public static bool TryReadFile(string path, out byte[] overlay)
     {
-        stream = null;
+        overlay = Array.Empty<byte>();
         return false;
     }
 
-    public static bool TryRead(string path, Span<byte> dest, out int read)
+    public static bool TryLocate(string name, out int lba, out uint size)
     {
-        read = 0;
+        lba = 0;
+        size = 0;
         return false;
     }
 
-    public static void Clear() { }
-
-    // dopasuj sygnatury do CueFs.cs gdy build pokaże CS1501
-    public static object? Get(string path) => null;
-    public static bool Has(string path) => false;
+    public static bool TryReadSectorData(int lba, int size, out byte[] overlay)
+    {
+        overlay = Array.Empty<byte>();
+        return false;
+    }
 }
