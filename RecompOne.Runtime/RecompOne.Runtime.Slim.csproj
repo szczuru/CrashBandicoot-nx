@@ -7,27 +7,43 @@
     <RootNamespace>RecompOne.Runtime</RootNamespace>
     <AssemblyName>RecompOne.Runtime</AssemblyName>
     <DefineConstants>$(DefineConstants);SWITCH_SLIM</DefineConstants>
-    <!-- Na start: wyłącz default items i dodaj tylko potrzebne globy -->
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Rdzeń HLE / GPU / SPU / CD / memory — DOPASUJ do realnej struktury forka -->
+    <!-- Wszystko z drzewa Runtime -->
     <Compile Include="**/*.cs" />
-    <!-- Wytnij desktop host / Silk / UI -->
+
+    <!-- ===== DESKTOP / UI / PLATFORM-SPECIFIC — WYCIĘTE DLA SWITCH SLIM ===== -->
+
+    <!-- Host window / panele / ImGui -->
     <Compile Remove="Host/Window/**/*.cs" />
+
+    <!-- Desktop audio / input (Silk, OpenAL) -->
+    <Compile Remove="Host/Audio.cs" />
+    <Compile Remove="Host/InputManager.cs" />
     <Compile Remove="Host/**/Silk*.cs" />
     <Compile Remove="Host/**/*OpenAL*.cs" />
     <Compile Remove="Host/**/*Glfw*.cs" />
     <Compile Remove="Host/**/*ImGui*.cs" />
-    <Compile Remove="Host/Window/Panels/**/*.cs" />
-    <!-- jeśli coś jeszcze ciągnie desktop: -->
+
+    <!-- Config zależny od ImGui / Silk / paneli -->
+    <Compile Remove="Config/ConfigManager.cs" />
+    <Compile Remove="Config/KeyBindingNames.cs" />
+
+    <!-- OpenGL HLE backend (Silk) — Switch używa soft VRAM + SDL present -->
+    <Compile Remove="Gpu/Hle/Gl/**/*.cs" />
+
+    <!-- Catalog PNG (StbImage) — niepotrzebne na konsoli do gry -->
+    <Compile Remove="Catalog/PngBgr555.cs" />
+
+    <!-- Modding (MonoMod, Roslyn) -->
+    <Compile Remove="Modding/**/*.cs" />
+
+    <!-- Ewentualne inne desktopowe ścieżki -->
     <Compile Remove="**/Desktop/**/*.cs" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- TYLKO pakiety bez których slim się nie zbuduje.
-         Usuń Silk, OpenTK, OpenAL, NativeFileDialog itd. -->
-    <!-- <PackageReference Include="System.Text.Json" Version="9.0.0" /> -->
-  </ItemGroup>
+  <!-- Celowo BRAK PackageReference do Silk, ImGui, StbImage, MonoMod, Roslyn.
+       Jeśli coś jeszcze ich wymaga — dopisz kolejny Compile Remove, nie pakiet. -->
 </Project>
