@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>RecompOne.Runtime</RootNamespace>
+    <AssemblyName>RecompOne.Runtime</AssemblyName>
+    <DefineConstants>$(DefineConstants);SWITCH_SLIM</DefineConstants>
+    <!-- Na start: wyłącz default items i dodaj tylko potrzebne globy -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Rdzeń HLE / GPU / SPU / CD / memory — DOPASUJ do realnej struktury forka -->
+    <Compile Include="**/*.cs" />
+    <!-- Wytnij desktop host / Silk / UI -->
+    <Compile Remove="Host/Window/**/*.cs" />
+    <Compile Remove="Host/**/Silk*.cs" />
+    <Compile Remove="Host/**/*OpenAL*.cs" />
+    <Compile Remove="Host/**/*Glfw*.cs" />
+    <Compile Remove="Host/**/*ImGui*.cs" />
+    <Compile Remove="Host/Window/Panels/**/*.cs" />
+    <!-- jeśli coś jeszcze ciągnie desktop: -->
+    <Compile Remove="**/Desktop/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- TYLKO pakiety bez których slim się nie zbuduje.
+         Usuń Silk, OpenTK, OpenAL, NativeFileDialog itd. -->
+    <!-- <PackageReference Include="System.Text.Json" Version="9.0.0" /> -->
+  </ItemGroup>
+</Project>
