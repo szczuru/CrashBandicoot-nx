@@ -2,6 +2,11 @@ namespace RecompOne.Runtime.Host;
 
 public static class InputManager
 {
+    /// <summary>
+    /// Desktop: poll Silk. Slim: no-op — pad ustawia host Switch w Controller.*.
+    /// </summary>
+    public static void Poll() { }
+
     public static void SetRumble(byte large, byte small) { }
     public static void RequestFullscreenToggle() { }
     public static void RequestCheatMenuToggle() { }
