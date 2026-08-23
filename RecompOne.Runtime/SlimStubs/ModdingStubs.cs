@@ -14,12 +14,21 @@ public sealed class ModInfo
 public static class ModLoader
 {
     public static bool ReloadAssets() => false;
+
+    /// <summary>SWITCH_SLIM: brak moda — no-op (woła game.recomp przy starcie).</summary>
+    public static void LoadAll(string modsDirectory) { }
+
+    public static void LoadAll() { }
+
+    public static void UnloadAll() { }
 }
 
 public static class ModManager
 {
     public static IReadOnlyList<ModInfo> Mods { get; } = Array.Empty<ModInfo>();
+
     public static void Initialize() { }
+
     public static void Shutdown() { }
 }
 
