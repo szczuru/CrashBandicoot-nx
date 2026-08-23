@@ -11,7 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\RecompOne.Runtime\RecompOne.Runtime.csproj" />
+    <ProjectReference Include="..\..\RecompOne.Runtime\RecompOne.Runtime.Slim.csproj" />
   </ItemGroup>
 
   <!-- NIE dodawaj Compile Include na sdl2-cs — SDK i tak je bierze z platform/switch/**/*.cs -->
