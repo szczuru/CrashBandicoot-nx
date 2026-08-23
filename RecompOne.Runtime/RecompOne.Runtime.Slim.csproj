@@ -11,6 +11,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Zasoby jak w pełnym Runtime (font BIOS, katalogi JSON, …) -->
+    <EmbeddedResource Include="**/*.raw" />
+    <EmbeddedResource Include="**/*.json" />
+    <EmbeddedResource Include="**/data/**/*" />
+    <!-- jeśli font leży konkretnie tu: -->
+    <!-- <EmbeddedResource Include="Bios/font1.raw" /> -->
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="**/*.cs" />
 
     <Compile Remove="Runtime.cs" />
