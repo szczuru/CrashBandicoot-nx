@@ -27,6 +27,11 @@
     <Compile Remove="Host/**/*Glfw*.cs" />
     <Compile Remove="Host/**/*ImGui*.cs" />
 
+    <!-- Catalog / CD zależne od Modding (niepotrzebne na Switch slim) -->
+    <Compile Remove="Catalog/TextureReplacements.cs" />
+    <Compile Remove="Catalog/TexturesCatalog.cs" />
+    <Compile Remove="Cdrom/DiscOverlay.cs" />
+
     <!-- Config zależny od ImGui / Silk / paneli -->
     <Compile Remove="Config/ConfigManager.cs" />
     <Compile Remove="Config/KeyBindingNames.cs" />
