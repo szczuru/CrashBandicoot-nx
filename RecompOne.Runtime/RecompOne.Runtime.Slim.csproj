@@ -31,12 +31,9 @@
     <Compile Remove="Catalog/TexturesCatalog.cs" />
     <Compile Remove="Cdrom/DiscOverlay.cs" />
 
-    <!-- cały folder Modding, potem doklejamy tylko stub -->
     <Compile Remove="Modding/**/*.cs" />
     <Compile Remove="**/Desktop/**/*.cs" />
 
-    <!-- STUBY slim (jawny Include po Remove) -->
-    <Compile Include="SlimStubs/ModdingStubs.cs" />
-    <Compile Include="SlimStubs/TexturesCatalogStub.cs" />
+    <!-- NIE dodawaj znowu SlimStubs — **/*.cs już je bierze -->
   </ItemGroup>
 </Project>
