@@ -12,6 +12,14 @@ public static class ModLoader
     public static bool ReloadAssets() => false;
 }
 
+public static class HookManager
+{
+    public static void Initialize() { }
+    public static void Shutdown() { }
+    public static void Tick() { }
+    public static void OnFrame() { }
+}
+
 public static class ModManager
 {
     public static IReadOnlyList<ModInfo> Mods { get; } = Array.Empty<ModInfo>();
