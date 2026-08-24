@@ -8,16 +8,8 @@
     <AssemblyName>RecompOne.Runtime</AssemblyName>
     <DefineConstants>$(DefineConstants);SWITCH_SLIM</DefineConstants>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <!-- zostaw true (domyślnie): SDK sam bierze .raw / .json -->
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
   </PropertyGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="Bios\Fonts\font1.raw" />
-    <EmbeddedResource Include="Bios\Fonts\font2.raw" />
-    <EmbeddedResource Include="Catalog\data\levels.scus94900.json" />
-    <EmbeddedResource Include="Catalog\data\sounds.scus94900.json" />
-    <EmbeddedResource Include="Catalog\data\textures.scus94900.json" />
-  </ItemGroup>
 
   <ItemGroup>
     <Compile Include="**/*.cs" />
@@ -44,9 +36,13 @@
 
     <Compile Remove="Modding/**/*.cs" />
     <Compile Remove="**/Desktop/**/*.cs" />
-
     <Compile Remove="Runtime.cs" />
   </ItemGroup>
 
-  <!-- BRAK ItemGroup EmbeddedResource — SDK doda Bios/Fonts/*.raw i Catalog/data/*.json sam -->
+  <!-- Tylko małe JSON — BEZ font1/font2.raw (idą na RomFS) -->
+  <ItemGroup>
+    <EmbeddedResource Include="Catalog\data\levels.scus94900.json" />
+    <EmbeddedResource Include="Catalog\data\sounds.scus94900.json" />
+    <EmbeddedResource Include="Catalog\data\textures.scus94900.json" />
+  </ItemGroup>
 </Project>
