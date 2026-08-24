@@ -6,7 +6,7 @@ public static class KromFont
 {
     public const uint Font1Address = 0xBFC66000u;
     public const uint Font2Address = 0xBFC66000u + 0x3D68u; // 0xBFC69D68
-    
+
     private const int Font1RomOffset = 0x66000;
     private const int Font2RomOffset = 0x69D68;
 
@@ -14,12 +14,13 @@ public static class KromFont
 
     private static readonly byte[] Font1 = LoadResource("font1.raw");
     private static readonly byte[] Font2 = LoadResource("font2.raw");
-    
+
     public static void InstallInto(byte[] biosRom)
     {
         Array.Copy(Font1, 0, biosRom, Font1RomOffset, Font1.Length);
         Array.Copy(Font2, 0, biosRom, Font2RomOffset, Font2.Length);
     }
+
     public static uint Krom2RawAdd(uint code)
     {
         ushort c = (ushort)code;
@@ -29,6 +30,7 @@ public static class KromFont
             return Font2Address + (uint)(Krom2Offset(code) * GlyphBytes);
         return 0xFFFFFFFFu;
     }
+
     public static ushort Krom2Offset(uint code)
     {
         ushort c = (ushort)code;
@@ -40,7 +42,7 @@ public static class KromFont
     }
 
     private readonly record struct Lookup(ushort Codepoint, ushort Offset);
-    
+
     private static readonly Lookup[] Table =
     {
         new(0x8140, 0x0000), new(0x8180, 0x003f), new(0x81ad, 0x006d), new(0x81b8, 0x006c),
@@ -65,14 +67,46 @@ public static class KromFont
 
     private static byte[] LoadResource(string fileName)
     {
+        // 1) Plik na RomFS / SD (AOT Switch — bez dużego embedded → Illink OK)
+        string[] candidates =
+        {
+            fileName,
+            "Fonts/" + fileName,
+            "Bios/Fonts/" + fileName,
+            "/" + fileName,
+            "/switch/" + fileName,
+        };
+
+        foreach (var path in candidates)
+        {
+            try
+            {
+                if (File.Exists(path))
+                    return File.ReadAllBytes(path);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        // 2) Fallback embedded (PC / stary build)
         var asm = typeof(KromFont).Assembly;
         string expected = $"{asm.GetName().Name}.Bios.Fonts.{fileName}";
         string? name = asm.GetManifestResourceNames().FirstOrDefault(
             n => n == expected || n.EndsWith("." + fileName, StringComparison.Ordinal));
-        using var s = asm.GetManifestResourceStream(name ?? expected)
-            ?? throw new InvalidOperationException($"the embedded font resource wasn't found: {fileName}");
-        using var ms = new MemoryStream();
-        s.CopyTo(ms);
-        return ms.ToArray();
+        if (name != null)
+        {
+            using var s = asm.GetManifestResourceStream(name);
+            if (s != null)
+            {
+                using var ms = new MemoryStream();
+                s.CopyTo(ms);
+                return ms.ToArray();
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"font not found: {fileName}. Place font1.raw/font2.raw on RomFS root or /switch/.");
     }
 }
