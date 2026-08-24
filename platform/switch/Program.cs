@@ -5,8 +5,40 @@ namespace CrashBandicoot.Switch;
 
 internal static class Program
 {
+    private static readonly string[] LogPaths =
+    {
+        "sdmc:/switch/aot_crash_log.txt",
+        "/switch/aot_crash_log.txt",
+        "/aot_crash_log.txt",
+        "aot_crash_log.txt",
+    };
+
+    private static void BootLog(string msg)
+    {
+        try { Console.WriteLine(msg); } catch { /* ignore */ }
+
+        foreach (var path in LogPaths)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir) && dir != "/" && !dir.StartsWith("sdmc:", StringComparison.Ordinal))
+                {
+                    try { Directory.CreateDirectory(dir); } catch { /* ignore */ }
+                }
+                File.AppendAllText(path, msg + Environment.NewLine);
+                return;
+            }
+            catch
+            {
+                // try next path
+            }
+        }
+    }
+
     private static int Main(string[] args)
     {
+        BootLog("[AOT] Main start");
         try
         {
             var root = AppContext.BaseDirectory;
@@ -18,18 +50,19 @@ internal static class Program
 
             var cwd = Directory.GetCurrentDirectory();
 
-            Console.WriteLine("[Switch] Crash Bandicoot (RecompOne + platform host)");
-            Console.WriteLine($"[Switch] BaseDirectory: {AppContext.BaseDirectory}");
-            Console.WriteLine($"[Switch] CWD: {cwd}");
+            BootLog("[Switch] Crash Bandicoot (RecompOne + platform host)");
+            BootLog($"[Switch] BaseDirectory: {AppContext.BaseDirectory}");
+            BootLog($"[Switch] CWD: {cwd}");
 
             try
             {
                 AppPaths.SetRoot(cwd);
                 AppPaths.EnsureCreated();
+                BootLog("[Switch] AppPaths OK");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Switch] AppPaths: {ex.Message}");
+                BootLog($"[Switch] AppPaths: {ex}");
             }
 
             string? cuePath = null;
@@ -43,53 +76,61 @@ internal static class Program
 
             if (cuePath is null)
             {
-                Console.WriteLine("[Switch] Brak .cue");
+                BootLog("[Switch] Brak .cue — exit 1");
                 return 1;
             }
-            Console.WriteLine($"[Switch] Znaleziono .cue: {cuePath}");
+            BootLog($"[Switch] Znaleziono .cue: {cuePath}");
 
             var gameDll = GameAssemblyLoader.FindGameDll(cwd);
             if (gameDll is null)
             {
-                Console.WriteLine("[Switch] Brak game.recomp.dll");
+                BootLog("[Switch] Brak game.recomp.dll — exit 1");
                 return 1;
             }
+            BootLog($"[Switch] game dll: {gameDll}");
 
+            BootLog("[Switch] LoadGame...");
             var asm = GameAssemblyLoader.LoadGame(gameDll);
             GameAssemblyLoader.Inspect(asm);
+            BootLog("[Switch] Inspect OK");
 
             using var host = new SwitchPlatformHost();
             Runtime.SetPlatformHost(host);
-            Console.WriteLine("[Switch] Runtime.SetPlatformHost(SwitchPlatformHost) OK");
+            BootLog("[Switch] Runtime.SetPlatformHost(SwitchPlatformHost) OK");
 
+            BootLog("[Switch] Creating PSMemory...");
             IMemory memory = new PSMemory();
-            Console.WriteLine("[Switch] PSMemory created.");
+            BootLog("[Switch] PSMemory created.");
 
             try
             {
+                BootLog($"[Switch] Entry.Run(..., \"{cuePath}\") ...");
                 GameAssemblyLoader.InvokeEntryRun(asm, memory, cuePath);
-                Console.WriteLine("[Switch] Entry.Run returned normally.");
+                BootLog("[Switch] Entry.Run returned normally.");
             }
             catch (Exception ex)
             {
                 var inner = ex is System.Reflection.TargetInvocationException tie && tie.InnerException != null
                     ? tie.InnerException
                     : ex;
-                Console.WriteLine($"[Switch] Entry.Run FAILED: {inner}");
-                Console.WriteLine(inner.StackTrace);
+                BootLog($"[Switch] Entry.Run FAILED: {inner}");
+                BootLog(inner.StackTrace ?? "(no stack)");
             }
             finally
             {
                 try { Runtime.SetPlatformHost(null); } catch { /* ignore */ }
                 try { Runtime.Shutdown(); } catch { /* ignore */ }
-                host.Shutdown();
+                try { host.Shutdown(); } catch { /* ignore */ }
+                BootLog("[Switch] Shutdown done");
             }
 
+            BootLog("[AOT] Main end OK");
             return 0;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[Switch] FATAL: {ex}");
+            BootLog($"[Switch] FATAL: {ex}");
+            BootLog(ex.StackTrace ?? "(no stack)");
             return 1;
         }
     }
@@ -101,6 +142,7 @@ internal static class Program
             Path.Combine(cwd, "crash", "Crash Bandicoot.cue"),
             Path.Combine(cwd, "Crash Bandicoot.cue"),
             "/switch/crash/Crash Bandicoot.cue",
+            "sdmc:/switch/crash/Crash Bandicoot.cue",
             "/crash/Crash Bandicoot.cue",
         };
 
@@ -108,7 +150,7 @@ internal static class Program
         {
             bool exists = false;
             try { exists = File.Exists(p); } catch { /* ignore */ }
-            Console.WriteLine($"[Switch] check: {p} exists={exists}");
+            BootLog($"[Switch] check: {p} exists={exists}");
             if (exists) return p;
         }
         return null;
